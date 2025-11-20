@@ -4,15 +4,17 @@ OLD_CHAR_POS: 	.half 0,0
 SWORD_ACTIVE: 	.word 1			#flag da espada
 SWORD_POS:	.half 32,192
 GAME_STATE:	.word 0			#flag do estado do jogo (0=jogando,1=pegando item)
-ITEM_TIMER:	.word 0			#tempo que a pose de pegar item vai ficar e tempo do áudio
+ITEM_TIMER:	.word 0			#tempo que a pose de pegar item vai ficar e tempo do Ã¡udio
 ##DRONE##
-DRONE_POS:	.half 288,160		#posição inicial
+DRONE_POS:	.half 288,160		#posiÃ§Ã£o inicial
 DRONE_VEL:	.word 4			#Velocidade no eixo Y
 DRONE_FLAG:	.word 1
 
-
-
-
+######EDITADO JL######
+##VIDA/DANO#
+HEALTH_PLAYER: 	.word 3			#comeÃ§a com 3 de vida
+INV_TIMER: 	.word 0			#tempo de invencibilidade (0=nÃ£o invencivel)
+######EDITADO JL######
 .text
 SETUP:		
 		
@@ -28,7 +30,17 @@ GAME_LOOP:	la t0,GAME_STATE	#carrega o estado do jogo
 		
 		j END_FRAME_PROCESSING
 		
-STATE_PLAYING:	la a0,map1		#carregando o mapa para printar
+STATE_PLAYING:	
+######EDITADO JL######
+		la t0,INV_TIMER		#carregando tempo de invencibilidade
+		lw t1,0(t0)		
+		beqz t1,SKIP_INV_DECREMENT	#se for 0 n ta mais invencivel
+		addi t1,t1,-1		#decrementando tempo
+		sw t1,0(t0)
+SKIP_INV_DECREMENT:
+######EDITADO JL######
+		
+		la a0,map1		#carregando o mapa para printar
 		li a1,0
 		li a2,0
 		mv a3,s0
@@ -68,13 +80,35 @@ SKIP_SWORD_DRAW:
 		call PRINT
 		
 SKIP_DRONE_DRAW:
-
-		la t0,CHAR_POS		#carregando posicao do personagem
-		la a0,char		#para printar personagem
-		lh a1,0(t0)		#carregando x do personagem
-		lh a2,2(t0)		#carregando y do personagem
+######EDITADO JL######
+		la t0,INV_TIMER		#carregando tempo de invencibilidade
+		lw t1,0(t0)
+		bnez t1,CHECK_BLINK	#se n for zero ainda ta invencivel vai piscar
+		
+		la t0,CHAR_POS		#carregando personagem pra printar
+		la a0,char
+		lh a1,0(t0)
+		lh a2,2(t0)
 		mv a3,s0
 		call PRINT
+		j SKIP_CHAR_DRAW
+		
+CHECK_BLINK:
+		andi t2,t1,8		#alterna frames pra ele piscar, isola o 4Âº bit
+		beqz t2,DRAW_INVINCIBLE #toda vez q o bit for zero printa
+		j SKIP_CHAR_DRAW
+		
+DRAW_INVINCIBLE:
+		la t0,CHAR_POS		#printando invencivel piscando
+		la a0,char
+		lh a1,0(t0)
+		lh a2,2(t0)
+		mv a3,s0
+		call PRINT
+		
+SKIP_CHAR_DRAW:
+######EDITADO JL######
+
 		
 		la t0,SWORD_ACTIVE
 		lw t1,0(t0)
@@ -134,15 +168,15 @@ STATE_ITEM_COLLECTED:
 		call PRINT
 SKIP_DRONE_POSE:
 	
-		la t0,ITEM_TIMER
+		la t0,ITEM_TIMER	#carregando tempo de coleta do item
 		lw t1,0(t0)
 		addi t1,t1,-1
 		sw t1,0(t0)
 		
-		beqz t1,END_ITEM_COLLECTED
+		beqz t1,END_ITEM_COLLECTED 	#se for zero acabou o tempo
 		
-		la t0,CHAR_POS
-		la a0,char
+		la t0,CHAR_POS		#printa a posiÃ§Ã£o de pegar item
+		la a0,char		#aq vai mudar a imagem pra char_item ou algo assim
 		lh a1,0(t0)
 		lh a2,2(t0)
 		mv a3,s0
@@ -170,10 +204,10 @@ END_FRAME_PROCESSING:
 		
 		j GAME_LOOP
 		
-KEY2:		li t1,0xFF200000	# carrega o endereço de controle do KDMMIO
+KEY2:		li t1,0xFF200000	# carrega o endereÃ§o de controle do KDMMIO
 		lw t0,0(t1)		# Le bit de Controle Teclado
 		andi t0,t0,0x0001	# mascara o bit menos significativo
-	   	beq t0,zero,FIM   	# Se não há tecla pressionada então vai para FIM
+	   	beq t0,zero,FIM   	# Se nÃ£o hÃ¡ tecla pressionada entÃ£o vai para FIM
 	  	lw t2,4(t1)  		# le o valor da tecla tecla
 		
 		li t0,'w'
@@ -194,33 +228,61 @@ KEY2:		li t1,0xFF200000	# carrega o endereço de controle do KDMMIO
 FIM:		ret
 
 CHECK_DRONE_COLLISION:
-		la t0,DRONE_FLAG
+		la t0,DRONE_FLAG	#carregando flag do drone
 		lw t1,0(t0)
-		beqz t1,FIM_COL_DRONE
+		beqz t1,FIM_COL_DRONE	#se for 0 n tem drone
 		
-		la t0,CHAR_POS
+		la t0,CHAR_POS		#carregando posicao do personagem pra comparar
 		lh t1,0(t0)
 		lh t2,2(t0)
 		
-		la t0,DRONE_POS
+		la t0,DRONE_POS		#carregando posicao do drone pra comparar
 		lh t3,0(t0)
 		lh t4,2(t0)
 		
-		#calculando distancia
+		#calculando distancia entre o drone e o personagem
 		sub t5,t1,t3
 		bgez t5,SKIP_NEG_X
-		neg t5,t5
+		neg t5,t5		#inverte se for negativo
 		
-SKIP_NEG_X:	li t6,24
-		bge t5,t6,FIM_COL_DRONE
+SKIP_NEG_X:	li t6,24		#24=limite de colisao
+		bge t5,t6,FIM_COL_DRONE #se for maior que 24 n colidiu x
 		
 		sub t5,t2,t4
 		bgez t5,SKIP_NEG_Y
 		neg t5,t5
 		
-SKIP_NEG_Y:	bge t5,t6,FIM_COL_DRONE
+SKIP_NEG_Y:	bge t5,t6,FIM_COL_DRONE #se for maior que 24 n colidiu y
 
-		#COLIDIU (decrementar vida/pintar de vermelho)
+######EDITADO JL######
+TAKE_DAMAGE:	la t0,INV_TIMER		#carregando tempo de invencibilidade
+		lw t1,0(t0)
+		bnez t1,FIM_TAKE_DAMAGE	#se >0 ta invencivel, logo n toma dano
+		
+		li a7,31
+		li a0,60
+		li a1,200
+		li a2,120
+		li a3,127
+		ecall
+		
+		la t0,HEALTH_PLAYER	#carregando vida
+		lw t1,0(t0)
+		addi t1,t1,-1		#decrementa vida
+		sw t1,0(t0)
+		
+		li t2,60
+		la t0,INV_TIMER		#tempo de invencibilidade apos tomar dano
+		sw t2,0(t0)
+		
+		blez t1,GAME_OVER	#se chegar a 0, game over
+		
+		j FIM_TAKE_DAMAGE
+GAME_OVER:	#implementar aqui oq acontece no game over
+		li a7,10		#por enquanto so finalizando programa
+		ecall
+FIM_TAKE_DAMAGE:
+######EDITADO JL######
 
 		
 FIM_COL_DRONE:	ret

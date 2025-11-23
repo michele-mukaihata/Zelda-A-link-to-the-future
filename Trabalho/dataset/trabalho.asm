@@ -16,12 +16,24 @@ ATT_TIMER:	.word 0		#frames do ataque
 MAP_WIDTH: 	.word 20	#largura do mapa em blocos
 
 #Dados dos Inimigos
-DRONE_POS:	.half 288,160	#posicao inicial
+#DRONE#
+DRONE_POS:	.half 288,160	#posicao inicial drone
 DRONE_VEL:	.word 4		#velocidade no eixo Y
 DRONE_FLAG:	.word 1		#1=vivo 0=morto
+#TURRET#
+TURRET_POS:	.half 288,64 	#posicao turret
+TURRET_FLAG:	.word 1		#1=vivo 0=morto
+TURRET_CD:	.word 0
+BULLET_POS:	.half 0,0	#posicao atual da bala
+BULLET_ACTIVE:	.word 0		#0=comecando a atirar 1=viajando
+BULLET_SPEED:	.word 10		#velocidade do tiro
+
+
 
 #Controle de Níveis
 CURRENT_LEVEL:       .word 1	#nivel atual
+LAST_LEVEL:	     .word 1
+TARGET_LEVEL:	     .word 1
 CURRENT_MAP_BG_PTR:  .word 0	#ponteiro para o background atual
 CURRENT_MAP_COL_PTR: .word 0	#ponteiro para o mapa de colisao
 TRANSITION_TIMER:    .word 0	#tempo de transição de tela
@@ -119,18 +131,35 @@ SKIP_ATT_DECREMENT:
 
 		call CHECK_ATT_COLLISION		#verifica se o ataque ta pegando na hitbox
 		
+		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		li t2,3
+		beq t1,t2,DRAW_SHOP_BG			#se for nivel 3 desenho eh diferente pq eh loja
+		
 		la a0,CURRENT_MAP_BG_PTR		#carregando o mapa para printar
 		lw a0,0(a0)
 		li a1,0
 		li a2,0
 		mv a3,s0
 		call PRINT
+		j END_DRAW_BG
+DRAW_SHOP_BG:
+		call DRAW_BLACK_SCREEN
+		la a0,CURRENT_MAP_BG_PTR
+		lw a0,0(a0)
+		li a1,160
+		li a2,128
+		mv a3,s0
+		call PRINT
+END_DRAW_BG:
 		
 		call DRAW_SCENARIO
 		
 		call KEY2
 		call UPDATE_DRONE
+		call UPDATE_TURRET
 		call CHECK_DRONE_COLLISION
+		call CHECK_BULLET_COLLISION
 		call CHECK_INTERACTION
 		
 		call DRAW_FULL_HUD
@@ -228,7 +257,7 @@ SKIP_CHAR_DRAW:
 		sw t1,0(t0)		#mudando o estado para 1=pegando item
 		
 		la t0,ITEM_TIMER
-		li t1,80		#tempo que vai ficar parado
+		li t1,65		#tempo que vai ficar parado
 		sw t1,0(t0)
 		
 		#tocando som#
@@ -249,12 +278,18 @@ STATE_TRANSITION_SCREEN:
 		addi t1,t1,-1
 		sw t1,0(t0)
 		
-		li t2,30
+		li t2,15
 		bne t1,t2,SKIP_LEVEL_CHANGE_TRANSITION
 		
 		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		la t0,LAST_LEVEL
+		sw t1,0(t0)
+		
+		la t0,TARGET_LEVEL
 		lw t3,0(t0)
-		addi t3,t3,1
+		
+		la t0,CURRENT_LEVEL
 		sw t3,0(t0)
 		
 		#li t4,5
@@ -262,20 +297,96 @@ STATE_TRANSITION_SCREEN:
 		
 		call LOAD_LEVEL
 		
+		
 		la t0,CHAR_POS
 		li t3,0			#mudar o X aqui
 		li t4,192		#mudar o Y aqui
 		sh t3,0(t0)
 		sh t4,2(t0)
 		
+		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		
+		li t2,3
+		beq t1,t2,SETUP_LEVEL_3
+		
+		#configurando inimigos por nivel#
+		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		
+		li t2,2
+		beq t1,t2,SETUP_LEVEL_2
+		
 		la t0,DRONE_FLAG	#aq vai ser a sentinela
 		li t3,1
 		sw t3,0(t0)
+		
+		la t0,TURRET_FLAG
+		sw zero,0(t0)
+		
 		la t0,DRONE_POS
 		li t3,288
 		li t4,160
 		sh t3,0(t0)
 		sh t4,2(t0)
+		
+		j SKIP_LEVEL_CHANGE_TRANSITION
+		
+SETUP_LEVEL_2:
+		la t0,DRONE_FLAG
+		li t1,1
+		sw t1,0(t0)
+		
+		la t0,TURRET_FLAG
+		li t1,1
+		sw t1,0(t0)
+		
+		la t0,DRONE_POS
+		li t3,288
+		li t4,192 
+		sh t3,0(t0)
+		sh t4,2(t0)
+		
+		la t0,TURRET_POS
+		li t3,288
+		li t4,64
+		sh t3,0(t0)
+		sh t4,2(t0)
+		
+		la t0,LAST_LEVEL
+		lw t1,0(t0)
+		li t2,3
+		beq t1,t2,SPAWN_LADDER
+		
+		la t0,CHAR_POS
+		li t3,32
+		li t4,192
+		sh t3,0(t0)
+		sh t4,2(t0)
+		j SKIP_LEVEL_CHANGE_TRANSITION
+SPAWN_LADDER:
+		la t0,CHAR_POS
+		li t3,192
+		li t4,68
+		sh t3,0(t0)
+		sh t4,2(t0)
+		
+		j SKIP_LEVEL_CHANGE_TRANSITION
+SETUP_LEVEL_3:
+		la t0,DRONE_FLAG
+		sw zero,0(t0)
+		la t0,TURRET_FLAG
+		sw zero,0(t0)
+		la t0,BULLET_ACTIVE
+		sw zero,0(t0)
+		
+		la t0,CHAR_POS
+		li t3,192
+		li t4,320
+		sh t3,0(t0)
+		sh t4,2(t0)
+		
+		j SKIP_LEVEL_CHANGE_TRANSITION
 		
 SKIP_LEVEL_CHANGE_TRANSITION:
 		bnez t1,END_FRAME_PROCESSING
@@ -421,41 +532,144 @@ SKIP_NEG_X:	li t6,24		#24=limite de colisao
 		neg t5,t5
 		
 SKIP_NEG_Y:	bge t5,t6,FIM_COL_DRONE #se for maior que 24 n colidiu y
-
-TAKE_DAMAGE:	la t0,INV_TIMER		#carregando tempo de invencibilidade
-		lw t1,0(t0)
-		bnez t1,FIM_TAKE_DAMAGE	#se >0 ta invencivel, logo n toma dano
-		
-		li a7,31		#som
-		li a0,60
-		li a1,200
-		li a2,120
-		li a3,127
-		ecall
-		
-		la t0,HEALTH_PLAYER	#carregando vida
-		lw t1,0(t0)
-		addi t1,t1,-1		#decrementa vida
-		sw t1,0(t0)
-		
-		li t2,35
-		la t0,INV_TIMER		#tempo de invencibilidade apos tomar dano
-		sw t2,0(t0)
-		
-		blez t1,GAME_OVER	#se chegar a 0, game over
-		
-		j FIM_TAKE_DAMAGE
-GAME_OVER:	#implementar aqui oq acontece no game over
-		li a7,10		#por enquanto so finalizando programa
-		ecall
-FIM_TAKE_DAMAGE:
+		j TAKE_DAMAGE
 
 FIM_COL_DRONE:	ret
+
+UPDATE_TURRET:	
+		addi sp,sp,-4
+		sw ra,0(sp)
+		
+		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		li t2,2
+		bne t1,t2,FIM_TURRET_FUNC
+		
+		la t0,TURRET_CD
+		lw t1,0(t0)
+		beqz t1,CHECK_TURRET_ALIVE
+		addi t1,t1,-1
+		sw t1,0(t0)
+		
+CHECK_TURRET_ALIVE:
+		la t0,TURRET_FLAG	#verifica se ta viva ainda
+		lw t1,0(t0)
+		beqz t1,UPDATE_BULLET_ONLY
+		
+		la t0,TURRET_POS
+		la a0,char		#trocar a sprite############################
+		lh a1,0(t0)
+		lh a2,2(t0)
+		mv a3,s0
+		call PRINT
+		
+		la t0,BULLET_ACTIVE
+		lw t1,0(t0)
+		bnez t1,MOVE_BULLET	#se for 1 a bala ta viajando
+		
+		la t0,TURRET_CD
+		lw t1,0(t0)
+		bnez t1,FIM_TURRET_FUNC
+		
+		la t0,BULLET_ACTIVE
+		li t1,1			#se chegou aq comeca a atirar
+		sw t1,0(t0)
+		
+		la t0,TURRET_CD
+		li t1,20
+		sw t1,0(t0)
+		
+		la t0,TURRET_POS	#carregando bala na posicao da turret
+		lh t2,0(t0)
+		lh t3,2(t0)
+		
+		addi t2,t2,8		#fazendo sair da frente da turret
+		addi t3,t3,32
+		
+		la t0,BULLET_POS
+		sh t2,0(t0)
+		sh t3,2(t0)
+		
+		j DRAW_BULLET
+MOVE_BULLET:
+		la t0,BULLET_POS
+		lh t2,0(t0)
+		lh t3,2(t0)
+		
+		la t4,BULLET_SPEED	#incrementando a speed na posicao da bala
+		lw t4,0(t4)
+		add t3,t3,t4
+		sh t3,2(t0)
+		
+		li t5,384		#limite
+		bge t3,t5,RESET_BULLET
+		
+		#verificar colisao aqui##############
+		
+		j DRAW_BULLET
+		
+RESET_BULLET:
+		la t0,BULLET_ACTIVE
+		sw zero,0(t0)
+		j FIM_TURRET_FUNC
+DRAW_BULLET:
+		la t0,BULLET_POS
+		la a0,teste		#mudar sprite de tiro#######################
+		lh a1,0(t0)
+		lh a2,2(t0)
+		mv a3,s0
+		call PRINT
+		j FIM_TURRET_FUNC
+UPDATE_BULLET_ONLY:
+		j FIM_TURRET_FUNC
+FIM_TURRET_FUNC:
+	lw ra,0(sp)
+	addi sp,sp,4
+	ret
+CHECK_BULLET_COLLISION:
+		la t0,BULLET_ACTIVE
+		lw t1,0(t0)
+		beqz t1,FIM_COL_BULLET	#se n tem bala n tem dano
+		
+		la t0,BULLET_POS	
+		lh t1,0(t0)		#x bala
+		lh t2,2(t0)		#y bala
+		
+		la t0,CHAR_POS		
+		lh t3,0(t0)		#x player
+		lh t4,2(t0)		#y player
+		
+		sub t5,t1,t3
+		bgez t5,POS_X_B
+		neg t5,t5
+POS_X_B:
+		li t6,20		#hitbox
+		bge t5,t6,FIM_COL_BULLET
+		
+		sub t5,t2,t4
+		bgez t5,POS_Y_B
+		neg t5,t5
+POS_Y_B:
+		li t6,20		#hitbox
+		bge t5,t6,FIM_COL_BULLET
+		
+		#se chegou aqui acertou o player#
+		la t0,BULLET_ACTIVE
+		sw zero,0(t0)
+		j TAKE_DAMAGE
+FIM_COL_BULLET:
+		ret
 
 UPDATE_DRONE:	la t0,DRONE_FLAG	#carrega flag
 		lw t1,0(t0)
 		beqz t1,FIM_DRONE	#se for 0 ta morto
 		
+		la t0,CURRENT_LEVEL
+		lw t1,0(t0)
+		li t2,2
+		beq t1,t2,MOVIMENTO_HORIZONTAL
+
+MOVIMENTO_VERTICAL:		
 		la t0,DRONE_POS		#carrega posicao
 		lh t1,2(t0)
 		
@@ -466,13 +680,31 @@ UPDATE_DRONE:	la t0,DRONE_FLAG	#carrega flag
 		sh t1,2(t0)
 		
 		li t4,352		#limite inferior
-		bge t1,t4,INVERTE_DRONE_Y
+		bge t1,t4,INVERTE_VELOCIDADE
 		
 		li t5,32		#limite superior
-		ble t1,t5,INVERTE_DRONE_Y 
+		ble t1,t5,INVERTE_VELOCIDADE 
 		
 		ret
-INVERTE_DRONE_Y:
+		
+MOVIMENTO_HORIZONTAL:
+		la t0,DRONE_POS
+		lh t1,0(t0)
+		
+		
+		la t2,DRONE_VEL
+		lw t3,0(t2)
+		
+		add t1,t1,t3
+		sh t1,0(t0)
+		
+		li t4,320		#limite horizontal
+		bge t1,t4,INVERTE_VELOCIDADE
+		li t5,192
+		ble t1,t5,INVERTE_VELOCIDADE
+		
+		ret
+INVERTE_VELOCIDADE:
 		neg t3,t3		#t3=-t3 -> inverte
 		sw t3,0(t2)
 		ret	
@@ -683,6 +915,10 @@ CHECK_ATT_COLLISION:
 		lh t1,0(t0)
 		lh t2,2(t0)
 		
+		la t0,DRONE_FLAG
+		lw t3,0(t0)
+		beqz t3,CHECK_TURRET_HIT
+	
 		la t0,DRONE_POS		#posicao drone
 		lh t3,0(t0)
 		lh t4,2(t0)
@@ -692,20 +928,50 @@ CHECK_ATT_COLLISION:
 		neg t5,t5
 SKIP_NEG_X_ATT:
 		li t6,40		#se a distancia for 40 ou menos ataca
-		bge t5,t6,FIM_ATT_COLLISION
+		bge t5,t6,CHECK_TURRET_HIT
 		
 		sub t5,t2,t4
 		bgez t5,SKIP_NEG_Y_ATT
 		neg t5,t5
 SKIP_NEG_Y_ATT:
-		bge t5,t6,FIM_ATT_COLLISION
+		bge t5,t6,CHECK_TURRET_HIT
 		
 		la t0,DRONE_FLAG
 		sw zero,0(t0)
 		
 		##adicionar efeito visual,etc##
 		
-		ret
+CHECK_TURRET_HIT:
+		la t0,CURRENT_LEVEL
+		lw t3,0(t0)
+		li t4,2
+		bne t3,t4,FIM_ATT_COLLISION
+	
+		la t0,TURRET_FLAG
+		lw t3,0(t0)
+		beqz t3,FIM_ATT_COLLISION
+	
+		la t0,TURRET_POS
+		lh t3,0(t0)
+		lh t4,2(t0)
+	
+		sub t5,t1,t3
+		bgez t5,SKIP_NEG_X_TURRET
+		neg t5,t5
+SKIP_NEG_X_TURRET:
+		li t6,40
+		bge t5,t6,FIM_ATT_COLLISION
+		
+		sub t5,t2,t4
+		bgez t5,SKIP_NEG_Y_TURRET
+		neg t5,t5
+SKIP_NEG_Y_TURRET:
+		bge t5,t6,FIM_ATT_COLLISION
+		
+		la t0,TURRET_FLAG
+		sw zero,0(t0)
+		
+		
 		
 FIM_ATT_COLLISION:
 		ret
@@ -736,6 +1002,8 @@ LOOP_X_SCENARIO:
 		beq t0,t2,PREP_COIN
 		li t3,3
 		beq t0,t3,PREP_DOOR
+		li t4,6
+		beq t0,t4,PREP_LADDER
 		j SKIP_DRAW_TILE
 		
 PREP_PILAR:#1
@@ -747,7 +1015,9 @@ PREP_COIN:#2
 PREP_DOOR:#3
 		la a0,porta
 		j DRAW_TILE_NOW
-		
+PREP_LADDER:#4	
+		la a0,porta 		#mudar aqui o sprite pra escada
+		j DRAW_TILE_NOW
 DRAW_TILE_NOW:				#printa o tile daquela posição
 		slli a1,s3,5
 		slli a2,s2,5
@@ -837,6 +1107,9 @@ CHECK_INTERACTION:
 		li t5,3			#3 é porta
 		beq t4,t5,INTERACT_DOOR
 		
+		li t5,6
+		beq,t4,t5,INTERACT_LADDER
+		
 		j FIM_INTERACTION
 
 INTERACT_COIN:	sb zero,0(t3)
@@ -867,14 +1140,77 @@ INTERACT_DOOR:
 	    	li a3, 100
 	    	ecall
 	    	
+	    	la t0,CURRENT_LEVEL
+	    	lw t1,0(t0)
+	    	
+	    	li t2,1
+	    	beq t1,t2,DOOR_LVL_2
+	    	
+	    	li t2,2
+	    	beq t1,t2,DOOR_LVL_4
+	    	
+	    	j START_TRANSITION
+DOOR_LVL_2:
+	li t1,2				#vai pra fase 2 se tiver na 1
+	j SAVE_TARGET
+DOOR_LVL_4:
+	li t1,4				#vai pra fase 4 se tiver na 2
+	j SAVE_TARGET
+SAVE_TARGET:
+	la t0,TARGET_LEVEL
+	sw t1,0(t0)
+START_TRANSITION:	
 	    	la t0,GAME_STATE
 	    	li t1,3			#estado 3=transição
 	    	sw t1,0(t0)
 	    	
 	    	la t0,TRANSITION_TIMER
-	    	li t1,60
+	    	li t1,30
 	    	sw t1,0(t0)
 	    	j FIM_INTERACTION
+	    	
+INTERACT_LADDER:
+		li a7, 31
+        	li a0, 58           # Som diferente da porta
+        	li a1, 500
+        	li a2, 0
+        	li a3, 100
+        	ecall
+        	
+        	la t0,CURRENT_LEVEL
+        	lw t1,0(t0)
+        	
+        	li t2,2
+        	beq t1,t2,LADDER_TO_SHOP
+        	
+        	li t2,3
+        	beq t1,t2,LADDER_BACK_TO_2
+        	
+        	j START_TRANSITION
+        	
+LADDER_TO_SHOP:
+        	li t1, 3            #vai pra loja
+        	j SAVE_TARGET_LADDER
+
+LADDER_BACK_TO_2:
+        	li t1, 2            #volta pro 2
+        	j SAVE_TARGET_LADDER
+
+SAVE_TARGET_LADDER:
+        	la t0, TARGET_LEVEL
+        	sw t1, 0(t0)
+        
+      
+        	j START_TRANSITION
+        	
+        	la t0,GAME_STATE
+        	li t1,3
+        	sw t1,0(t0)
+        	
+        	la t0,TRANSITION_TIMER
+        	li t1,60
+        	sw t1,0(t0)
+        	j FIM_INTERACTION
 
 FIM_INTERACTION:
     		lw ra, 0(sp)
@@ -1081,6 +1417,35 @@ FIND_SPRITE:
 		
 		lw ra,0(sp)
 		addi sp,sp,4
+		ret
+		
+TAKE_DAMAGE:	la t0,INV_TIMER		#carregando tempo de invencibilidade
+		lw t1,0(t0)
+		bnez t1,FIM_TAKE_DAMAGE	#se >0 ta invencivel, logo n toma dano
+		
+		li a7,31		#som
+		li a0,60
+		li a1,200
+		li a2,120
+		li a3,127
+		ecall
+		
+		la t0,HEALTH_PLAYER	#carregando vida
+		lw t1,0(t0)
+		addi t1,t1,-1		#decrementa vida
+		sw t1,0(t0)
+		
+		li t2,35
+		la t0,INV_TIMER		#tempo de invencibilidade apos tomar dano
+		sw t2,0(t0)
+		
+		blez t1,GAME_OVER	#se chegar a 0, game over
+		
+		j FIM_TAKE_DAMAGE
+GAME_OVER:	#implementar aqui oq acontece no game over
+		li a7,10		#por enquanto so finalizando programa
+		ecall
+FIM_TAKE_DAMAGE:
 		ret
 
 		

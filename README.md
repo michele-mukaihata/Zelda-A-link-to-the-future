@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Trabalho/TelaInicial.jpg" alt="Capa principal do jogo" width="600">
+  <img src="Trabalho/TelaInicial.jpg" alt="Capa principal do jogo" width="400">
 </p>
 <h1>Legend of Zelda: A link to the future</h1>
 

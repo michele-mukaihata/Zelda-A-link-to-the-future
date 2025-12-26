@@ -1,8 +1,7 @@
 <p align="center">
-  <img src="Trabalho/telaInicial.jpg" alt="Legend of Zelda: A Link to the Future" width="600">
+  <img src="Trabalho/TelaInicial.jpg" alt="Capa principal do jogo" width="600">
 </p>
 <h1>Legend of Zelda: A link to the future</h1>
-<h3>Jogo em Assembly RISC-V</h3>
 
 ## Índice
 
